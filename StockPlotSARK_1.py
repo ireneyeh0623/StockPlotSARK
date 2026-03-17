@@ -127,7 +127,6 @@ else:
             height=700,
             template=chart_template,
             xaxis_rangeslider_visible=False,
-            yaxis_title='價格',
             hovermode='x unified',
             font=dict(color=font_color),
             xaxis=dict(color=font_color, tickfont=dict(color=font_color)),
