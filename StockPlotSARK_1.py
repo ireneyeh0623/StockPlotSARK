@@ -110,7 +110,7 @@ else:
             yaxis_title='價格',
             hovermode='x unified',
             font=dict(color=font_color), # 同步 Plotly 字體顏色
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5, font=dict, color=font_color),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5, font=dict(color=font_color)),
             paper_bgcolor=bg_color,
             plot_bgcolor=bg_color 
         )
