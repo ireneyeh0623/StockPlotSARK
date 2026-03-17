@@ -1,3 +1,9 @@
+早安！這段程式碼在邏輯上是完整的，但如果在 Streamlit Cloud 部署時失敗，通常是因為程式碼中處理 pandas_ta 回傳資料的方式不夠強健，導致在某些股票資料下會產生「維度不匹配」或「空值」的錯誤。
+
+以下是針對穩定性優化後的版本，我主要修正了 PSAR 指標的選取邏輯，確保它在各種情況下都能正常運作：
+
+修正後的程式碼 (app.py)
+Python
 import streamlit as st
 import yfinance as yf
 import pandas as pd
@@ -34,16 +40,18 @@ st.title("📈 股票分析系統 (五線譜 + SARX)")
 st.subheader(f"📊 目前分析標的: {search_id}")
 
 if calculate_btn or stock_id:
-    # 抓取資料
+    # 抓取資料 (確保 auto_adjust=True)
     data = yf.download(search_id, start=start_date, end=end_date, auto_adjust=True)
     
     if not data.empty:
-        # 資料整理
+        # 資料整理：確保 Close 是一維數值
         df = data.copy()
         df = df.reset_index()
-        # 修正：確保 Close 是一維數值
-        close_prices = df['Close'].values.flatten()
-        df['Close_1D'] = close_prices
+        
+        # 關鍵修正：確保所有核心欄位都是 1D Array
+        df['Close_1D'] = df['Close'].values.flatten()
+        df['High_1D'] = df['High'].values.flatten()
+        df['Low_1D'] = df['Low'].values.flatten()
         df['Time_Idx'] = np.arange(len(df)) 
         
         # --- 1. 計算樂活五線譜 (線性回歸) ---
@@ -56,11 +64,16 @@ if calculate_btn or stock_id:
         df['Lower_1'] = df['Trend_Line'] - 1 * std_dev
         df['Lower_2'] = df['Trend_Line'] - 2 * std_dev
 
-        # --- 2. 計算 SAR 指標 (使用 pandas_ta) ---
-        # SAR 用於判斷趨勢反轉
-        sar_df = df.ta.psar(high=df['High'], low=df['Low'], close=df['Close_1D'])
-        # PSARl (Long) 和 PSARs (Short) 會合併在結果中
-        df['SAR'] = sar_df.iloc[:, 0] # 取得 SAR 數值
+        # --- 2. 計算 SAR 指標 ---
+        # 使用 pandas_ta 計算，並確保欄位正確
+        psar = df.ta.psar(high='High_1D', low='Low_1D', close='Close_1D')
+        
+        # PSAR 會回傳多個欄位 (PSARl, PSARs 等)，我們將它們合併成一欄顯示
+        if psar is not None:
+            # 取第一欄和第二欄的非空值 (SAR 點位)
+            df['SAR'] = psar.iloc[:, 0].fillna(psar.iloc[:, 1])
+        else:
+            df['SAR'] = np.nan
 
         # --- 3. 繪製圖表 ---
         fig = go.Figure()
@@ -79,8 +92,8 @@ if calculate_btn or stock_id:
                                      line=dict(dash='dash' if 'Trend' not in band else 'solid', 
                                                color=colors[idx], width=1)))
 
-        # 拋物線 SAR (點狀標示)
-        if show_sar:
+        # 拋物線 SAR
+        if show_sar and 'SAR' in df:
             fig.add_trace(go.Scatter(x=df['Date'], y=df['SAR'], name='Parabolic SAR',
                                      mode='markers', marker=dict(size=4, color='purple', symbol='circle')))
 
@@ -91,17 +104,19 @@ if calculate_btn or stock_id:
         # 數據摘要
         st.header("📊 數據摘要")
         last_price = df['Close_1D'].iloc[-1]
-        last_sar = df['SAR'].iloc[-1]
         
         col1, col2, col3 = st.columns(3)
         col1.metric("最後收盤價", f"{last_price:.2f}")
-        col2.metric("SAR 轉折價", f"{last_sar:.2f}")
         
-        # 簡單趨勢判斷
-        if last_price > last_sar:
-            col3.write("🔥 **目前趨勢：看多 (SAR 位於價下)**")
+        if 'SAR' in df and not pd.isna(df['SAR'].iloc[-1]):
+            last_sar = df['SAR'].iloc[-1]
+            col2.metric("SAR 轉折價", f"{last_sar:.2f}")
+            if last_price > last_sar:
+                col3.success("🔥 目前趨勢：看多 (SAR 位於價下)")
+            else:
+                col3.warning("❄️ 目前趨勢：看空 (SAR 位於價上)")
         else:
-            col3.write("❄️ **目前趨勢：看空 (SAR 位於價上)**")
+            col2.write("SAR 計算中...")
             
     else:
         st.error("找不到資料，請檢查代號是否正確。")
