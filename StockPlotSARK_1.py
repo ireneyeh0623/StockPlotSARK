@@ -23,6 +23,7 @@ theme_choice = st.sidebar.radio("圖表主題(對應網頁背景)", ["亮色(白
 if theme_choice == "深色(深色背景)":
     chart_template = "plotly_dark"
     font_color = "white"
+    bg_color = "#0E1117"
     st.markdown("""
         <style>
         /* 強制側邊欄、主背景、文字顏色為深色 */
@@ -35,6 +36,7 @@ if theme_choice == "深色(深色背景)":
 else:
     chart_template = "plotly_white"
     font_color = "black"
+    bg_color = "#FFFFFF"
     st.markdown("""
         <style>
         /* 強制側邊欄、主背景、文字顏色為純白 */
@@ -108,7 +110,9 @@ else:
             yaxis_title='價格',
             hovermode='x unified',
             font=dict(color=font_color), # 同步 Plotly 字體顏色
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5)
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5),
+            paper_bgcolor=bg_color,
+            plot_bgcolor=bg_color 
         )
         
         st.plotly_chart(fig, use_container_width=True)
