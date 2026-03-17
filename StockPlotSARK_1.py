@@ -110,8 +110,8 @@ else:
             yaxis_title='價格',
             hovermode='x unified',
             font=dict(color=font_color), # 同步 Plotly 字體顏色
-            xaxis=dict(color=font_color), # 加入這一行：強制 X 軸字體顏色
-            yaxis=dict(color=font_color), # 加入這一行：強制 Y 軸字體顏色
+            xaxis=dict(color=font_color, tickfont=dict(color=font_color)), # 加入這一行：強制 X 軸字體顏色與強制指定刻度字體顏色
+            yaxis=dict(color=font_color, tickfont=dict(color=font_color)), # 加入這一行：強制 Y 軸字體顏色與強制指定刻度字體顏色
             legend=dict(
                 orientation="h", 
                 yanchor="bottom", 
