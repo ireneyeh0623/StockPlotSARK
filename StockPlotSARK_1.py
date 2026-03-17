@@ -1,9 +1,3 @@
-早安！這段程式碼在邏輯上是完整的，但如果在 Streamlit Cloud 部署時失敗，通常是因為程式碼中處理 pandas_ta 回傳資料的方式不夠強健，導致在某些股票資料下會產生「維度不匹配」或「空值」的錯誤。
-
-以下是針對穩定性優化後的版本，我主要修正了 PSAR 指標的選取邏輯，確保它在各種情況下都能正常運作：
-
-修正後的程式碼 (app.py)
-Python
 import streamlit as st
 import yfinance as yf
 import pandas as pd
