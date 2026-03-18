@@ -86,7 +86,10 @@ else:
     
     if not data.empty:
         df = data.copy().reset_index()
-        
+        # --- [新增] 格式化日期字串，用於 X 軸顯示 ---
+        # 這樣會顯示成：Nov 02 2022
+        df['Date_Str'] = df['Date'].dt.strftime('%b %d %Y')
+
         if isinstance(df.columns, pd.MultiIndex):
             df.columns = df.columns.get_level_values(0)
             
@@ -108,20 +111,22 @@ else:
         # 繪圖
         fig = go.Figure()
 
+        # --- [修正] 將所有的 x=df['Date'] 改為 x=df['Date_Str'] ---
         fig.add_trace(go.Candlestick(
-            x=df['Date'], open=df['Open_1D'], high=df['High_1D'], low=df['Low_1D'], close=df['Close_1D'],
+            x=df['Date_Str'], open=df['Open_1D'], high=df['High_1D'], low=df['Low_1D'], close=df['Close_1D'],
             name='K線', increasing_line_color='#FF4136', decreasing_line_color='#2ECC40'
         ))
 
         fig.add_trace(go.Scatter(
-            x=df['Date'], y=df['SAR_Long'], name='多頭支撐', mode='markers',
+            x=df['Date_Str'], y=df['SAR_Long'], name='多頭支撐', mode='markers',
             marker=dict(size=4, color='#FF4136', symbol='circle')
         ))
 
         fig.add_trace(go.Scatter(
-            x=df['Date'], y=df['SAR_Short'], name='空頭壓力', mode='markers',
+            x=df['Date_Str'], y=df['SAR_Short'], name='空頭壓力', mode='markers',
             marker=dict(size=4, color='#2ECC40', symbol='circle')
         ))
+
         # --- 修改此處：新增 rangebreaks 或將 xaxis 類型改為 category 以消除缺口 ---
         fig.update_layout(
             height=700,
@@ -134,9 +139,6 @@ else:
                 type='category', 
                 color=font_color, 
                 tickfont=dict(color=font_color),
-                # 設定日期顯示格式為：月(縮寫) 日 年
-                tickformat='%b %d %Y',
-                # 自動控制標籤數量，避免 Nov 2 2025 等字串重疊
                 nticks=8  # 限制顯示的座標標籤數量，避免字體重疊
             ),
             yaxis=dict(color=font_color, tickfont=dict(color=font_color)),
