@@ -122,14 +122,20 @@ else:
             x=df['Date'], y=df['SAR_Short'], name='空頭壓力', mode='markers',
             marker=dict(size=4, color='#2ECC40', symbol='circle')
         ))
-
+        # --- 修改此處：新增 rangebreaks 或將 xaxis 類型改為 category 以消除缺口 ---
         fig.update_layout(
             height=700,
             template=chart_template,
             xaxis_rangeslider_visible=False,
             hovermode='x unified',
             font=dict(color=font_color),
-            xaxis=dict(color=font_color, tickfont=dict(color=font_color)),
+            # 關鍵修正：將 xaxis 類型設為 category，忽略非交易日
+            xaxis=dict(
+                type='category', 
+                color=font_color, 
+                tickfont=dict(color=font_color),
+                nticks=10  # 限制顯示的座標標籤數量，避免字體重疊
+            ),
             yaxis=dict(color=font_color, tickfont=dict(color=font_color)),
             legend=dict(
                 orientation="h", 
@@ -171,3 +177,8 @@ else:
                 
     else:
         st.error("找不到股票資料，請檢查代號是否正確。")
+
+# 要解決線圖中出現「缺口」的問題，是因為 Plotly 預設會在 X 軸（日期軸）上保留所有日曆天數，包含週末與國定假日。
+# 我們需要將 X 軸的類型從預設的日期格式改為**「類別格式 (Category)」**，這樣圖表就會僅按照資料中存在的日期進行連續排列，自動忽略沒有交易數據的日期。
+# 1.type='category'：這是最關鍵的設定。它告訴 Plotly 不要把 X 軸當作時間線，而是當作一串「標籤」。這樣一來，中間缺失的日期（休市日）就不會佔用任何空間。
+# 2.nticks=10：當 X 軸變成類別格式時，每個日期都會被視為獨立標籤。如果資料量很大，日期字體會重疊。設定 nticks 可以讓系統自動選取合適的間隔來顯示日期標籤。
