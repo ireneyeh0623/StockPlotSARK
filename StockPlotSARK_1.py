@@ -69,6 +69,10 @@ else:
 st.sidebar.markdown("---")
 af_start = st.sidebar.slider("AF 起始值", min_value=0.01, max_value=0.10, value=0.02, step=0.01)
 af_max = st.sidebar.slider("AF 極限值", min_value=0.10, max_value=0.50, value=0.20, step=0.01)
+st.sidebar.markdown("---")
+# 新增：收盤價確認機制參數
+up_tol = st.sidebar.number_input("多頭守住比例 (預設 0.99)", value=0.99, step=0.005, format="%.3f")
+down_tol = st.sidebar.number_input("空頭壓制比例 (預設 1.01)", value=1.01, step=0.005, format="%.3f")
 
 # 先定義分析按鈕
 analyze_btn = st.sidebar.button("開始分析")
@@ -132,7 +136,7 @@ else:
                     next_af = min(curr_af + af_start, af_max)
                 
                 if c_low <= curr_sar: # 觸碰點位
-                    if c_close > curr_sar * 0.99: # [改良邏輯] 收盤守住 0.99
+                    if c_close > curr_sar * up_tol: # [改良邏輯] 收盤守住 使用自定義比例
                         next_af, ep = af_start, c_high
                         next_sar = c_low # 重置為當日低點
                     else: # 未能守住，標準反轉
@@ -147,7 +151,7 @@ else:
                     next_af = min(curr_af + af_start, af_max)
                 
                 if c_high >= curr_sar: # 觸碰點位
-                    if c_close < curr_sar * 1.01: # [改良邏輯] 收盤壓在 1.01 以下
+                    if c_close < curr_sar * down_tol: # [改良邏輯] 收盤壓在 使用自定義比例
                         next_af, ep = af_start, c_low
                         next_sar = c_high # 重置為當日高點
                     else: # 未能守住，標準反轉
