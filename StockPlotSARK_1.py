@@ -3,7 +3,6 @@ import yfinance as yf
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
-import pandas_ta as ta
 from datetime import datetime
 
 # 網頁配置
@@ -97,16 +96,72 @@ else:
         df['High_1D'] = df['High'].values.flatten()
         df['Low_1D'] = df['Low'].values.flatten()
         df['Open_1D'] = df['Open'].values.flatten()
+
+        # --- 請刪除這一段 ---
+        # psar = df.ta.psar(high='High_1D', low='Low_1D', close='Close_1D', 
+        #                   af0=af_start, af=af_start, max_af=af_max)
         
-        psar = df.ta.psar(high='High_1D', low='Low_1D', close='Close_1D', 
-                          af0=af_start, af=af_start, max_af=af_max)
+        # if psar is not None:
+        #     df['SAR_Long'] = psar.iloc[:, 0]
+        #     df['SAR_Short'] = psar.iloc[:, 1]
+        # else:
+        #     df['SAR_Long'] = np.nan
+        #     df['SAR_Short'] = np.nan
+
+        # --- [取代為此段] 改良版 SAR 核心計算法 ---
+        df['SAR'] = np.nan
+        df['Trend'] = 0  # 1: 多頭, -1: 空頭
         
-        if psar is not None:
-            df['SAR_Long'] = psar.iloc[:, 0]
-            df['SAR_Short'] = psar.iloc[:, 1]
-        else:
-            df['SAR_Long'] = np.nan
-            df['SAR_Short'] = np.nan
+        # 初始設定
+        initial_trend = 1 if df['Close_1D'].iloc[0] > df['Open_1D'].iloc[0] else -1
+        curr_trend = initial_trend
+        curr_af = af_start
+        curr_sar = df['Low_1D'].iloc[0] if initial_trend == 1 else df['High_1D'].iloc[0]
+        ep = df['High_1D'].iloc[0] if initial_trend == 1 else df['Low_1D'].iloc[0]
+
+        for i in range(len(df)):
+            c_high, c_low, c_close = df['High_1D'].iloc[i], df['Low_1D'].iloc[i], df['Close_1D'].iloc[i]
+            df.iat[i, df.columns.get_loc('SAR')] = curr_sar
+            df.iat[i, df.columns.get_loc('Trend')] = curr_trend
+            
+            next_trend, next_af = curr_trend, curr_af
+            
+            if curr_trend == 1: # 上升趨勢
+                if c_high > ep:
+                    ep = c_high
+                    next_af = min(curr_af + af_start, af_max)
+                
+                if c_low <= curr_sar: # 觸碰點位
+                    if c_close > curr_sar * 0.99: # [改良邏輯] 收盤守住 0.99
+                        next_af, ep = af_start, c_high
+                        next_sar = c_low # 重置為當日低點
+                    else: # 未能守住，標準反轉
+                        next_trend, next_af, next_sar, ep = -1, af_start, ep, c_low
+                else: # 沒觸碰
+                    next_sar = curr_sar + curr_af * (ep - curr_sar)
+                    if i > 0: next_sar = min(next_sar, c_low, df['Low_1D'].iloc[i-1])
+            
+            else: # 下降趨勢
+                if c_low < ep:
+                    ep = c_low
+                    next_af = min(curr_af + af_start, af_max)
+                
+                if c_high >= curr_sar: # 觸碰點位
+                    if c_close < curr_sar * 1.01: # [改良邏輯] 收盤壓在 1.01 以下
+                        next_af, ep = af_start, c_low
+                        next_sar = c_high # 重置為當日高點
+                    else: # 未能守住，標準反轉
+                        next_trend, next_af, next_sar, ep = 1, af_start, ep, c_high
+                else: # 沒觸碰
+                    next_sar = curr_sar + curr_af * (ep - curr_sar)
+                    if i > 0: next_sar = max(next_sar, c_high, df['High_1D'].iloc[i-1])
+
+            curr_sar, curr_trend, curr_af = next_sar, next_trend, next_af
+
+        # 將結果分配回繪圖用的欄位
+        df['SAR_Long'] = df.apply(lambda x: x['SAR'] if x['Trend'] == 1 else np.nan, axis=1)
+        df['SAR_Short'] = df.apply(lambda x: x['SAR'] if x['Trend'] == -1 else np.nan, axis=1)
+
 
         # 繪圖
         fig = go.Figure()
@@ -183,7 +238,10 @@ else:
     else:
         st.error("找不到股票資料，請檢查代號是否正確。")
 
-# 要解決線圖中出現「缺口」的問題，是因為 Plotly 預設會在 X 軸（日期軸）上保留所有日曆天數，包含週末與國定假日。
-# 我們需要將 X 軸的類型從預設的日期格式改為**「類別格式 (Category)」**，這樣圖表就會僅按照資料中存在的日期進行連續排列，自動忽略沒有交易數據的日期。
-# 1.type='category'：這是最關鍵的設定。它告訴 Plotly 不要把 X 軸當作時間線，而是當作一串「標籤」。這樣一來，中間缺失的日期（休市日）就不會佔用任何空間。
-# 2.nticks=10：當 X 軸變成類別格式時，每個日期都會被視為獨立標籤。如果資料量很大，日期字體會重疊。設定 nticks 可以讓系統自動選取合適的間隔來顯示日期標籤。
+# 1.收盤價容許區間：
+#     在上升趨勢中，判斷條件改為 c_close > curr_sar * 0.99。即使盤中低價穿過 SAR，只要收盤沒跌破 SAR 的 99%，趨勢就不會反轉，而是重置計算。
+#     在下降趨勢中，則為 c_close < curr_sar * 1.01。
+# 2.重置機制：
+#     當觸發改良邏輯時，程式碼會執行 next_af = af_start（重置加速因子）以及 next_sar = c_low (或 c_high)，這能讓 SAR 點位更緊貼當日的影線。
+# 3.繪圖銜接：
+#     最後兩行將計算出的 SAR 根據 Trend 拆分回 SAR_Long 與 SAR_Short，這樣您後續的 Plotly 繪圖程式碼（紅點與綠點）完全不需要更動即可直接使用。
