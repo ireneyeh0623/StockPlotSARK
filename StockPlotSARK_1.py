@@ -12,7 +12,7 @@ st.set_page_config(page_title="改良版 SAR 趨勢追蹤系統 (K線版)", layo
 st.sidebar.header("參數設定")
 
 stock_id = st.sidebar.text_input("股票代號(如2330.TW或AAPL)", "2330.TW")
-start_date = st.sidebar.date_input("起始日期(YYYY/MM/DD)", datetime(2022, 10, 3))
+start_date = st.sidebar.date_input("起始日期(YYYY/MM/DD)", datetime(2025, 10, 1))
 end_date = st.sidebar.date_input("結束日期(YYYY/MM/DD)", datetime.now())
 
 # 增加圖表主題選擇
