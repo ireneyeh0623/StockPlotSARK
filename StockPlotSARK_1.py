@@ -134,7 +134,10 @@ else:
                 type='category', 
                 color=font_color, 
                 tickfont=dict(color=font_color),
-                nticks=10  # 限制顯示的座標標籤數量，避免字體重疊
+                # 設定日期顯示格式為：月(縮寫) 日 年
+                tickformat='%b %d %Y',
+                # 自動控制標籤數量，避免 Nov 2 2025 等字串重疊
+                nticks=8  # 限制顯示的座標標籤數量，避免字體重疊
             ),
             yaxis=dict(color=font_color, tickfont=dict(color=font_color)),
             legend=dict(
