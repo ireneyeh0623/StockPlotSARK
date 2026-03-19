@@ -5,26 +5,35 @@ import numpy as np
 import plotly.graph_objects as go
 from datetime import datetime
 
+# ==============================================================================
+# 1. 系統環境與側邊欄配置
+# ==============================================================================
+
 # 網頁配置
 st.set_page_config(page_title="改良版 SAR 趨勢追蹤系統 (K線版)", layout="wide")
 
 # --- 側邊欄：參數設定 ---
 st.sidebar.header("參數設定")
 
+# 股票與日期輸入
 stock_id = st.sidebar.text_input("股票代號(如2330.TW或AAPL)", "2330.TW")
 start_date = st.sidebar.date_input("起始日期(YYYY/MM/DD)", datetime(2025, 10, 1))
 end_date = st.sidebar.date_input("結束日期(YYYY/MM/DD)", datetime.now())
 
-# 增加圖表主題選擇
+# 圖表主題選擇：影響後續 CSS 渲染與 Plotly 模板
 theme_choice = st.sidebar.radio("圖表主題(對應網頁背景)", ["亮色(白色背景)", "深色(深色背景)"])
 
-# --- 強制背景色切換邏輯 (與五線譜邏輯一致) ---
+# ==============================================================================
+# 2. CSS 視覺樣式優化 (強制覆蓋各主題背景色)
+# ==============================================================================
+
 if theme_choice == "深色(深色背景)":
     chart_template = "plotly_dark"
     font_color = "white"
     bg_color = "#0E1117"
     st.markdown("""
         <style>
+        /* 深色模式：設定側邊欄與背景為深黑色 (#0E1117)，文字為白色 */
         [data-testid="stSidebar"], .stApp, header { background-color: #0E1117 !important; color: white !important; }
         .stMarkdown, p, h1, h2, h3, span { color: white !important; }
         input { color: white !important; background-color: #262730 !important; }
@@ -36,18 +45,18 @@ else:
     bg_color = "#FFFFFF"
     st.markdown("""
         <style>
-        /* 1. 強制背景與文字顏色 */
+        /* 亮色模式：設定背景為純白，文字為純黑 */
         [data-testid="stSidebar"], .stApp, header { background-color: #FFFFFF !important; color: black !important; }
         .stMarkdown, p, h1, h2, h3, span { color: black !important; }
         
-        /* 2. 徹底消除輸入框右側陰影與淡淡格線 */
+        /* 消除輸入框陰影，改用簡約淺灰色邊框 */
         div[data-baseweb="input"], div[data-baseweb="input"] > div, div[data-baseweb="input"] input {
             background-color: white !important;
             border-color: #dcdcdc !important;
             box-shadow: none !important;
         }
 
-        /* 3. 修正按鈕：黑底白字 */
+        /* 按鈕樣式：黑底白字，增加專業感 */
         div.stButton > button {
             background-color: #000000 !important;
             border: 1px solid #000000 !important;
@@ -60,42 +69,51 @@ else:
             background-color: #333333 !important;
         }
 
-        /* 4. 側邊欄邊框調整 */
+        /* 側邊欄邊框調整 */
         [data-testid="stSidebar"] { border-right: 1px solid #f0f2f6; }
         input { color: black !important; background-color: white !important; }
         </style>
         """, unsafe_allow_html=True)
 
 st.sidebar.markdown("---")
+# SAR 核心參數：AF (加速因子)
 af_start = st.sidebar.slider("AF 起始值", min_value=0.01, max_value=0.10, value=0.02, step=0.01)
 af_max = st.sidebar.slider("AF 極限值", min_value=0.10, max_value=0.50, value=0.20, step=0.01)
 st.sidebar.markdown("---")
-# 新增：收盤價確認機制參數
+# 收盤價容許度 (避免因盤中影線誤觸導致頻繁轉向)(收盤價確認機制參數)
 up_tol = st.sidebar.number_input("多頭守住比例 (預設 0.99)", value=0.99, step=0.005, format="%.3f")
 down_tol = st.sidebar.number_input("空頭壓制比例 (預設 1.01)", value=1.01, step=0.005, format="%.3f")
 
-# 先定義分析按鈕
+# 定義分析按鈕
 analyze_btn = st.sidebar.button("開始分析")
 
+# 自動處理台股代號 (.TW)
 search_id = f"{stock_id}.TW" if stock_id.isdigit() else stock_id
 
 st.title("🚀 改良版 SAR 趨勢追蹤系統 (K線版)")
 
-# --- 啟動邏輯：點擊按鈕後才計算 ---
+# ==============================================================================
+# 3. 數據抓取與計算邏輯
+# ==============================================================================
 if not analyze_btn:
-    st.info("💡 請設定參數後按「開始分析」。")
+    st.info("💡 請點開左上角選單 [ >> ] 在左側面板設定參數後，按「開始分析」即可產出圖表")
 else:
+    # 顯示股票代碼
+    st.markdown(f"<h3 style='color: {font_color};'>{search_id}</h3>", unsafe_allow_html=True)
+    
     data = yf.download(search_id, start=start_date, end=end_date, auto_adjust=True)
     
     if not data.empty:
         df = data.copy().reset_index()
-        # --- [新增] 格式化日期字串，用於 X 軸顯示 ---
+        # 格式化日期(用於 X 軸顯示)：移除 X 軸非交易日空隙的關鍵，先將日期轉為字串
         # 這樣會顯示成：Nov 02 2022
         df['Date_Str'] = df['Date'].dt.strftime('%b %d %Y')
 
+        # 處理 yfinance 可能產生的多層欄位
         if isinstance(df.columns, pd.MultiIndex):
             df.columns = df.columns.get_level_values(0)
-            
+        
+        # 展平數據確保計算穩定
         df['Close_1D'] = df['Close'].values.flatten()
         df['High_1D'] = df['High'].values.flatten()
         df['Low_1D'] = df['Low'].values.flatten()
@@ -114,13 +132,15 @@ else:
 
         # --- [取代為此段] 改良版 SAR 核心計算法 ---
         df['SAR'] = np.nan
-        df['Trend'] = 0  # 1: 多頭, -1: 空頭
+        df['Trend'] = 0  # 趨勢標記：1 為多頭, -1 為空頭
         
-        # 初始設定
+        # 初始趨勢判斷：若第一天收紅則初步看多
         initial_trend = 1 if df['Close_1D'].iloc[0] > df['Open_1D'].iloc[0] else -1
         curr_trend = initial_trend
         curr_af = af_start
+        # 初始 SAR 位在低點(多)或高點(空)
         curr_sar = df['Low_1D'].iloc[0] if initial_trend == 1 else df['High_1D'].iloc[0]
+        # EP (極值點)：多頭為最高價，空頭為最低價
         ep = df['High_1D'].iloc[0] if initial_trend == 1 else df['Low_1D'].iloc[0]
 
         for i in range(len(df)):
@@ -130,70 +150,80 @@ else:
             
             next_trend, next_af = curr_trend, curr_af
             
-            if curr_trend == 1: # 上升趨勢
+            # --- 多頭趨勢判斷 ---
+            if curr_trend == 1: # 上升趨勢(創新高)
                 if c_high > ep:
                     ep = c_high
-                    next_af = min(curr_af + af_start, af_max)
+                    next_af = min(curr_af + af_start, af_max) # 增加加速因子
                 
-                if c_low <= curr_sar: # 觸碰點位
-                    if c_close > curr_sar * up_tol: # [改良邏輯] 收盤守住 使用自定義比例
+                if c_low <= curr_sar: # 觸碰點位(盤中跌破 SAR)
+                    # [改良邏輯] 若收盤價仍高於 SAR*容許比例，則不轉向，僅重置 AF 並調整 SAR 位置
+                    if c_close > curr_sar * up_tol:
                         next_af, ep = af_start, c_high
                         next_sar = c_low # 重置為當日低點
-                    else: # 未能守住，標準反轉
+                    else: # 未能守住，標準反轉(真正收破：轉向為空頭)
                         next_trend, next_af, next_sar, ep = -1, af_start, ep, c_low
-                else: # 沒觸碰
+                else: # 正常上升(沒觸碰)
                     next_sar = curr_sar + curr_af * (ep - curr_sar)
+                    # 確保 SAR 不會高於前兩日低點
                     if i > 0: next_sar = min(next_sar, c_low, df['Low_1D'].iloc[i-1])
             
-            else: # 下降趨勢
+            # --- 空頭趨勢判斷 ---
+            else: # 下降趨勢(創新低)
                 if c_low < ep:
                     ep = c_low
                     next_af = min(curr_af + af_start, af_max)
                 
-                if c_high >= curr_sar: # 觸碰點位
-                    if c_close < curr_sar * down_tol: # [改良邏輯] 收盤壓在 使用自定義比例
+                if c_high >= curr_sar: # 觸碰點位(盤中突破 SAR)
+                    # [改良邏輯] 若收盤價仍低於 SAR*容許比例，不轉向
+                    if c_close < curr_sar * down_tol:
                         next_af, ep = af_start, c_low
                         next_sar = c_high # 重置為當日高點
-                    else: # 未能守住，標準反轉
+                    else: # 未能守住，標準反轉(真正收過：轉向為多頭)
                         next_trend, next_af, next_sar, ep = 1, af_start, ep, c_high
-                else: # 沒觸碰
+                else: # 正常下降(沒觸碰)
                     next_sar = curr_sar + curr_af * (ep - curr_sar)
+                    # 確保 SAR 不會低於前兩日高點
                     if i > 0: next_sar = max(next_sar, c_high, df['High_1D'].iloc[i-1])
 
             curr_sar, curr_trend, curr_af = next_sar, next_trend, next_af
 
-        # 將結果分配回繪圖用的欄位
+        # 將 SAR 分拆為多空兩欄，方便 Plotly 著色（紅點與綠點）
         df['SAR_Long'] = df.apply(lambda x: x['SAR'] if x['Trend'] == 1 else np.nan, axis=1)
         df['SAR_Short'] = df.apply(lambda x: x['SAR'] if x['Trend'] == -1 else np.nan, axis=1)
 
 
-        # 繪圖
+        # ==============================================================================
+        # 4. 繪圖與互動優化
+        # ==============================================================================
         fig = go.Figure()
 
-        # --- [修正] 將所有的 x=df['Date'] 改為 x=df['Date_Str'] ---
+        # 使用 Date_Str (字串日期) 當 X 軸，避開假日空隙
         fig.add_trace(go.Candlestick(
             x=df['Date_Str'], open=df['Open_1D'], high=df['High_1D'], low=df['Low_1D'], close=df['Close_1D'],
             name='K線', increasing_line_color='#FF4136', decreasing_line_color='#2ECC40'
         ))
 
+        # 多頭支撐點 (紅色)
         fig.add_trace(go.Scatter(
             x=df['Date_Str'], y=df['SAR_Long'], name='多頭支撐', mode='markers',
             marker=dict(size=4, color='#FF4136', symbol='circle')
         ))
 
+        # 空頭壓力點 (綠色)
         fig.add_trace(go.Scatter(
             x=df['Date_Str'], y=df['SAR_Short'], name='空頭壓力', mode='markers',
             marker=dict(size=4, color='#2ECC40', symbol='circle')
         ))
 
-        # --- 修改此處：新增 rangebreaks 或將 xaxis 類型改為 category 以消除缺口 ---
+        # 新增 rangebreaks 或將 xaxis 類型改為 category 以消除缺口
         fig.update_layout(
             height=700,
             template=chart_template,
-            xaxis_rangeslider_visible=False,
+            xaxis_rangeslider_visible=False, # 隱藏滑動條讓圖表乾淨
             hovermode='x unified',
             font=dict(color=font_color),
-            # 關鍵修正：將 xaxis 類型設為 category，忽略非交易日
+            # 關鍵修正：將 xaxis 類型設為 category，配合 Date_Str 使用以忽略非交易日
             xaxis=dict(
                 type='category', 
                 color=font_color, 
@@ -215,7 +245,9 @@ else:
         
         st.plotly_chart(fig, use_container_width=True)
 
-        # 數據摘要
+        # ==============================================================================
+        # 5. 數據摘要指標
+        # ==============================================================================
         st.header("📊 最新狀態")
         valid_df = df.dropna(subset=['Close_1D'])
         
