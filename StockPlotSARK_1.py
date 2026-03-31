@@ -81,8 +81,9 @@ af_start = st.sidebar.slider("AF 起始值", min_value=0.01, max_value=0.10, val
 af_max = st.sidebar.slider("AF 極限值", min_value=0.10, max_value=0.50, value=0.20, step=0.01)
 st.sidebar.markdown("---")
 # 收盤價容許度 (避免因盤中影線誤觸導致頻繁轉向)(收盤價確認機制參數)
-up_tol = st.sidebar.number_input("多頭守住比例 (預設 0.99)", value=0.99, step=0.005, format="%.3f")
-down_tol = st.sidebar.number_input("空頭壓制比例 (預設 1.01)", value=1.01, step=0.005, format="%.3f")
+tolerance_pct = st.sidebar.slider("誤差容忍值%(預設1%)", min_value=0.0, max_value=5.0, value=1.0, step=0.5, format="%.1f%%")
+up_tol = 1 - tolerance_pct / 100    # e.g. 1% → 0.99
+down_tol = 1 + tolerance_pct / 100  # e.g. 1% → 1.01
 
 # 定義分析按鈕
 analyze_btn = st.sidebar.button("開始分析")
